@@ -19,7 +19,7 @@ def load_files(*file_lists, train_pct=33, test_pct=33):
             p_dict[_] = {}
             p_dict[_]['songname'] = os.path.splitext((os.path.split(_)[1]))[0]
             p_dict[_]['data'] = _load_data(_)
-            p_dict[_]['categorization'] = i
+            p_dict[_]['classification'] = i
             #print(p_dict[_])
 
     train_files, test_files = _split_files(train_pct, test_pct, p_dict)
@@ -87,7 +87,7 @@ def calculate_features(save_file, file_list, *feature_funcs):
 def ff_bpm(song_data):
     """Calculates BPM for a song"""
     onset_env = librosa.onset.onset_strength(song_data, sr=sr)
-    return ('BPM', librosa.beat.estimate_tempo(onset_env, sr=sr))
+    return ('BPM', [librosa.beat.estimate_tempo(onset_env, sr=sr)])
 
 def ff_mfcc(song_data, n=40):
     """Calculates n MFCCs for a song"""
@@ -103,11 +103,46 @@ def ff_mfcc(song_data, n=40):
 ##
 ##    if k == 0:
 ##        #If no value is passed, k should be equal to the number of different classifications
-##        k = len(list(set([train_files[k]['categorization'] for k,v in train_files.items()])))
+##        k = len(list(set([train_files[k]['classification'] for k,v in train_files.items()])))
 ##
 ##    clf = sklearn.neighbors.KNeighborsClassifier(k, weights=weights)
 ##    clf.fit(X, y)
 
-def ml_svm(train_files, test_files):
+def ml_svm(train_files, test_files, feature):
     """SVM using MFCCs"""
-    pass
+
+    tr_classifications, te_classifications, te_ordering, tr_feats, te_feats, tr_ordering = [], [], [], [], [], []
+    
+    for k,v in train_files.items():
+        tr_ordering.append(train_files[k]['songname'])
+        tr_feats.append(train_files[k][feature])
+        tr_classifications.append(train_files[k]['classification'])
+	
+    clf = sklearn.svm.SVC(kernel='rbf')
+    clf.fit(tr_feats, tr_classifications)  
+
+    for k,v in test_files.items():
+        te_ordering.append(test_files[k]['songname'])
+        te_feats.append(test_files[k][feature])
+        te_classifications.append(test_files[k]['classification'])
+
+    results = clf.predict(te_feats)
+
+    rt = list(zip(results,te_classifications,te_ordering))
+    
+    #for perfect results, the first two elements of all tuples should match
+    correct_classification = [1 if x[0] == x[1] else 0 for x in rt]
+
+    _ = [print(x[2] + " is in group " + str(x[1]) + " and was predicted to be in group " + str(x[0])) for x in rt]
+
+    pct_correct = correct_classification.count(1)/float(len(correct_classification))
+
+    print("--------------------------")
+    print("Test results: " +  str(pct_correct) + "% correct")
+
+
+	
+#trf, tef = load_files(["./Kraftwerk"],["./Kellie Pickler"])
+#trf = calculate_features("", trf, ff_mfcc, ff_bpm)
+#tef = calculate_features("", tef, ff_mfcc, ff_bpm)
+#ml_svm(trf, tef, 'MFCC40')
